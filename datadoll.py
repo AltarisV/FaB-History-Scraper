@@ -1,5 +1,5 @@
 import dash
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 from dash import dcc
 from dash import html
 import pandas as pd
@@ -55,11 +55,39 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1('FaB History Analysis'),
     html.Div('Interactive visualization of matchup history.'),
-    html.H3(f'Total Matches: {total_matches}'),
-    html.H3(f'Total Winrate: {total_winrate:.2f}'),
-    html.H3(f'Winrate as Player 1: {winrate_player1:.2f}'),
-    html.H3(f'Winrate as Player 2: {winrate_player2:.2f}'),
-    html.H3(f'Number of different Opponents: {number_opponents:.2f}'),
+
+    html.Div([
+        dcc.RadioItems(
+            id='rating_filter',
+            options=[
+                {'label': 'All', 'value': 'all'},
+                {'label': 'Rated', 'value': 'True'},
+                {'label': 'Unrated', 'value': 'False'}
+            ],
+            value='all',  # Default value
+            labelStyle={'display': 'inline-block'}
+        ),
+        html.Div(id='stats_output')  # Div to display updated stats
+    ]),
+
+    html.Div([
+        dcc.Input(id='opponent_name_input', type='text', placeholder='Enter opponent name'),
+        html.Button('Submit', id='opponent_name_submit'),
+        html.Div(id='opponent_name_output')
+    ]),
+
+    html.Div([
+        dcc.Dropdown(
+            id='rated_dropdown',
+            options=[
+                {'label': 'All', 'value': 'all'},
+                {'label': 'Rated', 'value': 'True'},
+                {'label': 'Unrated', 'value': 'False'}
+            ],
+            value='all'
+        ),
+        dcc.Graph(id='rated_filtered_graph')
+    ]),
 
     dcc.Dropdown(
         id='sort_by_dropdown',
@@ -101,6 +129,79 @@ def update_graph(sort_by_value):
 
     figure = px.bar(sorted_data, x='Opponent', y='Win Rate', title='Win Rate Against Each Opponent')
     return figure
+
+@app.callback(
+    Output('opponent_name_output', 'children'),
+    [Input('opponent_name_submit', 'n_clicks')],
+    [State('opponent_name_input', 'value')]
+)
+def update_output(n_clicks, value):
+    if n_clicks is None or value is None:
+        return 'Enter an opponent name and click submit'
+
+    # Replace NaN values in 'Opponent' column and filter data
+    filtered_data = data[data['Opponent'].fillna('').str.contains(value, case=False)]
+
+    if filtered_data.empty:
+        return 'No matches found for this opponent'
+
+    # Group by 'Opponent' and calculate win rate and count for each
+    opponent_stats = filtered_data.groupby('Opponent').agg(
+        Match_Count=('Opponent', 'size'),
+        Win_Rate=('User_Win', 'mean')
+    ).reset_index()
+
+    # Formatting the output
+    results = []
+    for index, row in opponent_stats.iterrows():
+        results.append(f"{row['Opponent']}: {row['Match_Count']} matches, {row['Win_Rate']:.2f} win rate")
+
+    return html.Ul([html.Li(opponent) for opponent in results])
+
+
+@app.callback(
+    Output('rated_filtered_graph', 'figure'),
+    [Input('rated_dropdown', 'value')]
+)
+def update_rated_graph(value):
+    if value == 'all':
+        filtered_data = data
+    else:
+        is_rated = True if value == 'True' else False
+        filtered_data = data[data['Rated'] == is_rated]
+
+    # Calculate Win Rate for the filtered data
+    win_rate_filtered = filtered_data.groupby('Opponent').agg(Win_Rate=('User_Win', 'mean')).reset_index()
+
+    # Plotting the figure with the newly calculated win rates
+    figure = px.bar(win_rate_filtered, x='Opponent', y='Win_Rate', title='Win Rate (Filtered by Rated Status)')
+    return figure
+
+@app.callback(
+    Output('stats_output', 'children'),
+    [Input('rating_filter', 'value')]
+)
+def update_stats(rating_filter):
+    if rating_filter == 'all':
+        filtered_data = data
+    elif rating_filter == 'True':
+        filtered_data = data[data['Rated'] == True]
+    else:
+        filtered_data = data[data['Rated'] == False]
+
+    total_matches = len(filtered_data)
+    total_winrate = filtered_data['User_Win'].mean()
+    winrate_player1 = filtered_data[filtered_data['User_Is_Player1']]['User_Win'].mean()
+    winrate_player2 = filtered_data[filtered_data['User_Is_Player2']]['User_Win'].mean()
+    number_opponents = len(filtered_data.groupby('Opponent'))
+
+    return html.Div([
+        html.H3(f'Total Matches: {total_matches}'),
+        html.H3(f'Total Winrate: {total_winrate:.2f}'),
+        html.H3(f'Winrate as Player 1: {winrate_player1:.2f}'),
+        html.H3(f'Winrate as Player 2: {winrate_player2:.2f}'),
+        html.H3(f'Number of different Opponents: {number_opponents}')
+    ])
 
 
 # Run the app
