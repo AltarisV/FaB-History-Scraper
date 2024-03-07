@@ -11,7 +11,7 @@ To use `FaB-History-Scraper`, you need:
 ## Installation
 1. Open your browser and click on the GreaseMonkey/TamperMonkey extension icon.
 2. Choose to create a new script.
-3. Copy the contents of `FaB-History-Scraper.user.js` from this repository.
+3. Copy the contents of `fabHistoryScript.js` from this repository.
 4. Paste the script into the new script section in GreaseMonkey/TamperMonkey.
 5. Save the script.
 
