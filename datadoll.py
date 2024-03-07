@@ -32,12 +32,9 @@ winrate_player2 = data[data['User_Is_Player2']]['User_Win'].mean()
 opponent_win_rate = data.groupby('Opponent')['User_Win'].mean().reset_index()
 opponent_win_rate.rename(columns={'User_Win': 'Win Rate'}, inplace=True)
 
-# Check the entire list of opponents
-print(opponent_win_rate)
-
-
 # Calculate match count and win rate against each opponent
-opponent_stats = data.groupby('Opponent').agg(Match_Count=('Opponent', 'size'), Win_Rate=('User_Win', 'mean')).reset_index()
+opponent_stats = data.groupby('Opponent').agg(Match_Count=('Opponent', 'size'),
+                                              Win_Rate=('User_Win', 'mean')).reset_index()
 top_5_opponents = opponent_stats.nlargest(5, 'Match_Count')
 number_opponents = len(opponent_stats)
 
@@ -45,6 +42,14 @@ number_opponents = len(opponent_stats)
 round_win_rate = data.groupby('Round')['User_Win'].mean().reset_index()
 round_win_rate.rename(columns={'User_Win': 'Win Rate'}, inplace=True)
 
+round_win_rate['Win Rate'] = round_win_rate['Win Rate'] * 100
+
+# Create the figure
+round_win_rate_figure = px.bar(round_win_rate, x='Round', y='Win Rate', title='Win Rate per Round')
+
+# Update hover template to show percentage
+round_win_rate_figure.update_traces(hovertemplate='Round %{x}<br>Win Rate=%{y:.2f}%')
+round_win_rate_figure.update_layout(yaxis_title="Win Rate (%)")
 
 # Additional Data processing here
 
@@ -76,18 +81,6 @@ app.layout = html.Div([
         html.Div(id='opponent_name_output')
     ]),
 
-    html.Div([
-        dcc.Dropdown(
-            id='rated_dropdown',
-            options=[
-                {'label': 'All', 'value': 'all'},
-                {'label': 'Rated', 'value': 'True'},
-                {'label': 'Unrated', 'value': 'False'}
-            ],
-            value='all'
-        ),
-        dcc.Graph(id='rated_filtered_graph')
-    ]),
 
     dcc.Dropdown(
         id='sort_by_dropdown',
@@ -99,7 +92,18 @@ app.layout = html.Div([
         ],
         value='Name_asc'
     ),
-
+    html.Div([
+        dcc.RadioItems(
+            id='rated_filter',
+            options=[
+                {'label': 'All', 'value': 'all'},
+                {'label': 'Rated', 'value': True},
+                {'label': 'Unrated', 'value': False}
+            ],
+            value='all',  # Default value
+            labelStyle={'display': 'inline-block'}
+        ),
+    ]),
     dcc.Graph(id='filtered_graph'),
 
     dcc.Graph(
@@ -107,28 +111,59 @@ app.layout = html.Div([
         figure=px.bar(top_5_opponents, x='Opponent', y='Match_Count', title='Top 5 Opponents by Match Count')
     ),
 
-    dcc.Graph(
-        figure=px.bar(round_win_rate, x='Round', y='Win Rate', title='Win Rate per Round')
-    )
+    dcc.Graph(figure=round_win_rate_figure)
 
 ])
 
-# Callback for updating the graph based on sorting
+
 @app.callback(
     Output('filtered_graph', 'figure'),
-    [Input('sort_by_dropdown', 'value')]
+    [Input('sort_by_dropdown', 'value'), Input('rated_filter', 'value')]
 )
-def update_graph(sort_by_value):
+def update_graph(sort_by_value, rated_value):
+    # Filter by rated status if not 'all'
+    if rated_value != 'all':
+        filtered_data = data[data['Rated'] == rated_value]
+    else:
+        filtered_data = data.copy()
+
+    # Group by opponent and calculate win rate and match count
+    opponent_stats_filtered = filtered_data.groupby('Opponent').agg(
+        Match_Count=('Opponent', 'size'),
+        Win_Rate=('User_Win', 'mean')
+    ).reset_index()
+
+    # Convert 'Win_Rate' to percentage
+    opponent_stats_filtered['Win_Rate'] *= 100
+
+    # Determine sorting
     sort_by, order = sort_by_value.split('_')
     ascending = order == 'asc'
 
     if sort_by == 'Name':
-        sorted_data = opponent_win_rate.sort_values(by='Opponent', ascending=ascending)
+        opponent_stats_filtered.sort_values(by='Opponent', ascending=ascending, inplace=True)
     elif sort_by == 'Win Rate':
-        sorted_data = opponent_win_rate.sort_values(by='Win Rate', ascending=ascending)
+        opponent_stats_filtered.sort_values(by='Win_Rate', ascending=ascending, inplace=True)
 
-    figure = px.bar(sorted_data, x='Opponent', y='Win Rate', title='Win Rate Against Each Opponent')
+    # Create the figure
+    figure = px.bar(
+        opponent_stats_filtered,
+        x='Opponent',
+        y='Win_Rate',
+        title='Win Rate Against Each Opponent'
+    )
+
+    # Update hover template to show percentage and match count
+    figure.update_traces(
+        hovertemplate='Opponent: %{x}<br>Win Rate: %{y:.2f}%<br>Match Count: %{customdata}'
+    )
+    figure.update_layout(yaxis_title="Win Rate (%)")
+
+    # Add customdata for hover info
+    figure.update_traces(customdata=opponent_stats_filtered['Match_Count'])
+
     return figure
+
 
 @app.callback(
     Output('opponent_name_output', 'children'),
@@ -154,28 +189,10 @@ def update_output(n_clicks, value):
     # Formatting the output
     results = []
     for index, row in opponent_stats.iterrows():
-        results.append(f"{row['Opponent']}: {row['Match_Count']} matches, {row['Win_Rate']:.2f} win rate")
+        results.append(f"{row['Opponent']}: {row['Match_Count']} matches, {row['Win_Rate']:.2%} win rate")
 
     return html.Ul([html.Li(opponent) for opponent in results])
 
-
-@app.callback(
-    Output('rated_filtered_graph', 'figure'),
-    [Input('rated_dropdown', 'value')]
-)
-def update_rated_graph(value):
-    if value == 'all':
-        filtered_data = data
-    else:
-        is_rated = True if value == 'True' else False
-        filtered_data = data[data['Rated'] == is_rated]
-
-    # Calculate Win Rate for the filtered data
-    win_rate_filtered = filtered_data.groupby('Opponent').agg(Win_Rate=('User_Win', 'mean')).reset_index()
-
-    # Plotting the figure with the newly calculated win rates
-    figure = px.bar(win_rate_filtered, x='Opponent', y='Win_Rate', title='Win Rate (Filtered by Rated Status)')
-    return figure
 
 @app.callback(
     Output('stats_output', 'children'),
@@ -197,9 +214,9 @@ def update_stats(rating_filter):
 
     return html.Div([
         html.H3(f'Total Matches: {total_matches}'),
-        html.H3(f'Total Winrate: {total_winrate:.2f}'),
-        html.H3(f'Winrate as Player 1: {winrate_player1:.2f}'),
-        html.H3(f'Winrate as Player 2: {winrate_player2:.2f}'),
+        html.H3(f'Total Winrate: {total_winrate:.2%}'),
+        html.H3(f'Winrate as Player 1: {winrate_player1:.2%}'),
+        html.H3(f'Winrate as Player 2: {winrate_player2:.2%}'),
         html.H3(f'Number of different Opponents: {number_opponents}')
     ])
 
