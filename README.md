@@ -19,6 +19,7 @@ To use the Scraper, you need:
 1. Navigate to [https://gem.fabtcg.com/profile/player/](https://gem.fabtcg.com/profile/player/) in your web browser.
 2. The script should automatically run and begin scraping match history data.
 3. Once the scraping process is complete, the script will download a CSV file containing the scraped match history.
+4. Remember to deactivate the script to avoid running it every time you access your profile.
 
 ## How it Works
 The script navigates through each page of your match history, collecting data on each match. Once it reaches the end of the history, it compiles all collected data into a CSV format and triggers a download of this file.
