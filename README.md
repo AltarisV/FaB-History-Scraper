@@ -26,11 +26,5 @@ The script navigates through each page of your match history, collecting data on
 ## Note
 This script is intended for personal use and should be used ethically and in compliance with the website's terms of service. Please ensure that you do not violate any terms or overload the server with requests.
 
-## Contributions
-Contributions, issues, and feature requests are welcome. Feel free to check [issues page](https://github.com/[YourGitHubUsername]/FaB-History-Scraper/issues) if you want to contribute.
-
-## Author
-[Your Name]
-
 ## License
 This project is [MIT](https://choosealicense.com/licenses/mit/) licensed.
