@@ -12,17 +12,17 @@
 
     const navigationDelay = 2000;
     let allEventData = JSON.parse(localStorage.getItem('allEventData')) || [];
-  
+
     function scrapeEventData() {
         const currentPageLink = document.querySelector('.pagination-pages li.page-item.active');
         const currentPageIndex = currentPageLink ? parseInt(currentPageLink.textContent.trim()) : 1;
-      
+
         const events = document.querySelectorAll('.card.mb-3');
 
         events.forEach(event => {
             const eventDetails = event.querySelector('.card-body');
             if (eventDetails) {
-                let eventName, eventDate;
+                let eventName, eventDate, rated;
                 const eventRows = eventDetails.querySelectorAll('tbody tr');
                 eventRows.forEach(row => {
                     const thText = row.querySelector('th')?.textContent.trim();
@@ -32,6 +32,8 @@
                             eventName = tdText;
                         } else if (thText === 'Date') {
                             eventDate = tdText;
+                        } else if (thText === 'Rated?') {
+                            rated = tdText;
                         }
                     }
                 });
@@ -40,6 +42,7 @@
                 const eventResults = {
                     eventName: eventName || 'Event name not found',
                     eventDate: eventDate || 'Event date not found',
+                    rated: rated || 'Unknown', // Default to 'Unknown' if not found
                     matches: []
                 };
 
@@ -80,15 +83,16 @@
             localStorage.removeItem('allEventData'); // Clear the stored data
         }
     }
-  
+
     function saveDataToCSV() {
         // Convert allEventData to CSV format
-        const csvRows = ['Event Name,Event Date,Round,Player 1,Player 2,Result'];
+        const csvRows = ['Event Name,Event Date,Rated,Round,Player 1,Player 2,Result'];
         allEventData.forEach(event => {
             event.matches.forEach(match => {
                 const row = [
                     `"${event.eventName}"`,
                     `"${event.eventDate}"`,
+                    `"${event.rated}"`,
                     match.round,
                     `"${match.player1}"`,
                     `"${match.player2}"`,
