@@ -4,7 +4,7 @@
 `FaB-History-Scraper` is a userscript for GreaseMonkey/TamperMonkey designed to scrape a user's personal matchup history from [https://gem.fabtcg.com/profile/player/](https://gem.fabtcg.com/profile/player/). This script automates the process of gathering match history data, which can be useful for analysis, tracking progress, or simply archiving your match records.
 
 ## Prerequisites
-To use `FaB-History-Scraper`, you need:
+To use the Scraper, you need:
 - A web browser (such as Chrome or Firefox).
 - GreaseMonkey (for Firefox users) or TamperMonkey (for Chrome and other browsers) extension installed in your browser.
 
