@@ -4,6 +4,7 @@ from dash import dcc
 from dash import html
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objs as go
 
 # Load your CSV data
 file_path = 'match_history.csv'  # Replace with your CSV file path
@@ -32,9 +33,19 @@ winrate_player2 = data[data['User_Is_Player2']]['User_Win'].mean()
 opponent_win_rate = data.groupby('Opponent')['User_Win'].mean().reset_index()
 opponent_win_rate.rename(columns={'User_Win': 'Win Rate'}, inplace=True)
 
-# Calculate match count and win rate against each opponent
-opponent_stats = data.groupby('Opponent').agg(Match_Count=('Opponent', 'size'),
-                                              Win_Rate=('User_Win', 'mean')).reset_index()
+# Calculate match count, win count, and loss count against each opponent
+opponent_stats = data.groupby('Opponent').agg(
+    Match_Count=('Opponent', 'size'),
+    Win_Count=('User_Win', lambda x: x.sum()),  # Count the wins
+    Loss_Count=('User_Win', lambda x: (1-x).sum())  # Count the losses
+).reset_index()
+
+# Calculate win rate for later use
+opponent_stats['Win_Rate'] = opponent_stats['Win_Count'] / opponent_stats['Match_Count']
+
+# Sort opponents by win rate
+opponent_win_rate_sorted = opponent_win_rate.sort_values('Win Rate', ascending=True)
+
 top_5_opponents = opponent_stats.nlargest(5, 'Match_Count')
 number_opponents = len(opponent_stats)
 
@@ -50,6 +61,40 @@ round_win_rate_figure = px.bar(round_win_rate, x='Round', y='Win Rate', title='W
 # Update hover template to show percentage
 round_win_rate_figure.update_traces(hovertemplate='Round %{x}<br>Win Rate=%{y:.2f}%')
 round_win_rate_figure.update_layout(yaxis_title="Win Rate (%)")
+
+# Assuming top_5_opponents is already sorted by 'Match_Count' descending
+fig = go.Figure()
+fig.add_trace(go.Bar(
+    x=top_5_opponents['Opponent'],
+    y=top_5_opponents['Win_Count'],
+    name='Wins',
+    marker_color='#6495ED'
+))
+fig.add_trace(go.Bar(
+    x=top_5_opponents['Opponent'],
+    y=top_5_opponents['Loss_Count'],
+    name='Losses',
+    marker_color='#FF7F24'
+))
+
+# Modify the layout to stack the bars
+fig.update_layout(
+    barmode='stack',
+    title='Top 5 Opponents by Match Count',
+    xaxis_title='Opponent',
+    yaxis_title='Count'
+)
+
+fig_win_rate = px.bar(
+    opponent_win_rate_sorted,
+    x='Win Rate',
+    y='Opponent',
+    orientation='h',
+    title='Win Rate Against Each Opponent'
+)
+fig_win_rate.update_layout(yaxis={'categoryorder': 'total ascending'}, xaxis_title="Win Rate (%)")
+fig_win_rate.update_traces(marker_color='cyan')
+
 
 # Additional Data processing here
 
@@ -104,12 +149,9 @@ app.layout = html.Div([
             labelStyle={'display': 'inline-block'}
         ),
     ]),
-    dcc.Graph(id='filtered_graph'),
+    dcc.Graph(id='filtered_graph', figure=fig_win_rate),
 
-    dcc.Graph(
-        id='top-opponents-graph',
-        figure=px.bar(top_5_opponents, x='Opponent', y='Match_Count', title='Top 5 Opponents by Match Count')
-    ),
+    dcc.Graph(id='top-opponents-graph', figure=fig),
 
     dcc.Graph(figure=round_win_rate_figure)
 
@@ -223,4 +265,4 @@ def update_stats(rating_filter):
 
 # Run the app
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+    app.run_server(debug=False, host='0.0.0.0', port=8050)
