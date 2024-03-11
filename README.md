@@ -31,8 +31,11 @@ To visualize your match history data, you can use the `datadoll.py` script provi
 3. The script will generate visualizations of your match history data.
 4. After running `datadoll.py`, a webpage will start at [http://localhost:8050/](http://localhost:8050/). You can view the visualizations in your web browser.
 
-## Note
-This script is intended for personal use and should be used ethically and in compliance with the website's terms of service. Please ensure that you do not violate any terms or overload the server with requests.
+## Upcoming
+Very useful features like
+- How much Elo did I steal from this one player in all of our matches
+- How does the tournament starting time affect my performance
+- Not parsing top8 rounds as swiss rounds
 
 ## License
 This project is [MIT](https://choosealicense.com/licenses/mit/) licensed.
