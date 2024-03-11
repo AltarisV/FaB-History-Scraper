@@ -36,6 +36,7 @@ Very useful features like
 - How much Elo did I steal from this one player in all of our matches
 - How does the tournament starting time affect my performance
 - Not parsing top8 rounds as swiss rounds
+- More silly graphs
 
 ## License
 This project is [MIT](https://choosealicense.com/licenses/mit/) licensed.
