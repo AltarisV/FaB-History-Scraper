@@ -5,10 +5,16 @@ from dash import html
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
+from dateutil import parser
 
 # Load your CSV data
 file_path = 'match_history.csv'  # Replace with your CSV file path
 data = pd.read_csv(file_path)
+
+
+def parse_date(date_str):
+    date_str = date_str.replace('noon', '12:00 PM')
+    return parser.parse(date_str)
 
 
 def extract_player_id(player_str):
@@ -25,6 +31,9 @@ def extract_player_name(player_str):
     return player_str.split(' (')[0]
 
 
+# Apply the custom parse_date function to the 'Event Date' column
+data['Event_Date'] = data['Event Date'].apply(parse_date)
+
 data['Player1_ID'] = data['Player 1'].apply(extract_player_id)
 data['Player2_ID'] = data['Player 2'].apply(extract_player_id)
 
@@ -35,7 +44,7 @@ user_id = all_player_ids.value_counts().idxmax()  # Most frequent ID in all matc
 # Find the user's name using the most frequent ID
 user_name_row = data[(data['Player1_ID'] == user_id) | (data['Player2_ID'] == user_id)]
 user_name = user_name_row['Player 1'].iloc[0] if user_name_row['Player1_ID'].iloc[0] == user_id else \
-user_name_row['Player 2'].iloc[0]
+    user_name_row['Player 2'].iloc[0]
 
 # Determine opponent IDs and names, and whether the user won each match
 data['Opponent_ID'] = data.apply(lambda row: row['Player2_ID'] if row['Player1_ID'] == user_id else row['Player1_ID'],
