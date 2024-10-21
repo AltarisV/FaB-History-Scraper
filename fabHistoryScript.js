@@ -48,10 +48,10 @@
 
                 eventMatches.forEach(match => {
                     const round = match.querySelector('td:nth-child(1)').textContent.trim();
-                    const player1 = match.querySelector('td:nth-child(2)').textContent.trim();
-                    const player2 = match.querySelector('td:nth-child(3)').textContent.trim();
-                    const result = match.querySelector('td:nth-child(4)').textContent.trim();
-                    eventResults.matches.push({ round, player1, player2, result });
+                    const opponent = match.querySelector('td:nth-child(2)').textContent.trim();
+                    const result = match.querySelector('td:nth-child(3)').textContent.trim();
+                    const record = match.querySelector('td:nth-child(4)').textContent.trim();
+                    eventResults.matches.push({ round, opponent, result, record });
                 });
 
                 allEventData.push(eventResults);
@@ -86,7 +86,7 @@
 
     function saveDataToCSV() {
         // Convert allEventData to CSV format
-        const csvRows = ['Event Name,Event Date,Rated,Round,Player 1,Player 2,Result'];
+        const csvRows = ['Event Name,Event Date,Rated,Round,Opponent,Result,Record'];
         allEventData.forEach(event => {
             event.matches.forEach(match => {
                 const row = [
@@ -94,9 +94,9 @@
                     `"${event.eventDate}"`,
                     `"${event.rated}"`,
                     match.round,
-                    `"${match.player1}"`,
-                    `"${match.player2}"`,
+                    `"${match.opponent}"`,
                     `"${match.result}"`,
+                    `"${match.record}"`,
                 ].join(',');
                 csvRows.push(row);
             });
