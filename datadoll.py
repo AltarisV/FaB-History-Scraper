@@ -25,53 +25,48 @@ def extract_player_id(player_str):
 
 
 def extract_player_name(player_str):
-    # Extract the player name from the string
     if pd.isna(player_str) or '(' not in player_str:
         return player_str
-    return player_str.split(' (')[0]
+    # Split the string at the first occurrence of ' ('
+    name_part = player_str.split(' (')[0]
+    return name_part
 
+def extract_player_info(player_str):
+    if pd.isna(player_str) or '(' not in player_str or ')' not in player_str:
+        return None, player_str
+    player_id = player_str.split('(')[-1].split(')')[0]
+    player_name = player_str.split(' (')[0]
+    return player_id, player_name
 
 # Apply the custom parse_date function to the 'Event Date' column
 data['Event_Date'] = data['Event Date'].apply(parse_date)
 
-data['Player1_ID'] = data['Player 1'].apply(extract_player_id)
-data['Player2_ID'] = data['Player 2'].apply(extract_player_id)
+#parse data from the opponent column
+data['Opponent_Info'] = data['Opponent'].apply(extract_player_info)
 
-# Concatenate 'Player1_ID' and 'Player2_ID' columns to find the most frequent player ID
-all_player_ids = pd.concat([data['Player1_ID'], data['Player2_ID']])
-user_id = all_player_ids.value_counts().idxmax()  # Most frequent ID in all matches
+# Check Opponent ID columns to find the most frequent player ID
+user_id = data['Opponent'].value_counts().idxmax()  # Most frequent ID in all matches
 
-# Find the user's name using the most frequent ID
-user_name_row = data[(data['Player1_ID'] == user_id) | (data['Player2_ID'] == user_id)]
-user_name = user_name_row['Player 1'].iloc[0] if user_name_row['Player1_ID'].iloc[0] == user_id else \
-    user_name_row['Player 2'].iloc[0]
+# Extract player_id and player_name from the temporary column
+data['Opponent_ID'] = data['Opponent_Info'].apply(lambda x: x[0])
+data['Opponent_Name'] = data['Opponent_Info'].apply(lambda x: x[1])
 
-# Determine opponent IDs and names, and whether the user won each match
-data['Opponent_ID'] = data.apply(lambda row: row['Player2_ID'] if row['Player1_ID'] == user_id else row['Player1_ID'],
-                                 axis=1)
-data['Opponent_Name'] = data.apply(lambda row: row['Player 2'] if row['Player1_ID'] == user_id else row['Player 1'],
-                                   axis=1)
-data['User_Win'] = ((data['Player1_ID'] == user_id) & data['Result'].str.contains('Player 1 Win')) | \
-                   ((data['Player2_ID'] == user_id) & data['Result'].str.contains('Player 2 Win'))
+data.drop(columns=['Opponent_Info'], inplace=True)
 
 # Total winrate
-total_winrate = data['User_Win'].mean()
-
-# Winrate as Player 1 and Player 2
-data['User_Is_Player1'] = data['Player1_ID'] == user_id
-data['User_Is_Player2'] = data['Player2_ID'] == user_id
-winrate_player1 = data[data['User_Is_Player1']]['User_Win'].mean()
-winrate_player2 = data[data['User_Is_Player2']]['User_Win'].mean()
+total_winrate = int((data['Result'].value_counts().get('Win', 0) / len(data)) * 100)
 
 # Group data by opponent ID and calculate win rate
-opponent_win_rate = data.groupby('Opponent_ID')['User_Win'].mean().reset_index()
-opponent_win_rate.rename(columns={'User_Win': 'Win Rate'}, inplace=True)
+opponent_win_rate = data.groupby('Opponent_ID')['Result'].agg(
+    win_rate=lambda x: (x == 'Win').mean() * 100
+).reset_index()
+opponent_win_rate.rename(columns={'win_rate': 'Win Rate'}, inplace=True)
 
 # Calculate match count, win count, and loss count against each opponent
 opponent_stats = data.groupby('Opponent_ID').agg(
     Match_Count=('Opponent_ID', 'size'),
-    Win_Count=('User_Win', lambda x: x.sum()),  # Count the wins
-    Loss_Count=('User_Win', lambda x: (1 - x).sum())  # Count the losses
+    Win_Count=('Result', lambda x: (x == 'Win').sum()),  # Count the wins
+    Loss_Count=('Result', lambda x: (x == 'Loss').sum())  # Count the losses
 ).reset_index()
 
 # Calculate win rate for later use
@@ -92,10 +87,14 @@ top_5_opponents = opponent_stats.nlargest(5, 'Match_Count')
 number_opponents = len(opponent_stats)
 
 # Group data by round and calculate win rate
-round_win_rate = data.groupby('Round')['User_Win'].mean().reset_index()
-round_win_rate.rename(columns={'User_Win': 'Win Rate'}, inplace=True)
+round_win_rate = data.groupby('Round')['Result'].agg(
+    win_rate=lambda x: (x == 'Win').mean() * 100
+).reset_index()
+round_win_rate.rename(columns={'win_rate': 'Win Rate'}, inplace=True)
 
-round_win_rate['Win Rate'] = round_win_rate['Win Rate'] * 100
+round_win_rate['Win Rate'] = round_win_rate['Win Rate']
+
+print(data)
 
 # Create the figure
 round_win_rate_figure = px.bar(round_win_rate, x='Round', y='Win Rate', title='Win Rate per Round')
@@ -152,8 +151,8 @@ app.layout = html.Div([
             id='rating_filter',
             options=[
                 {'label': 'All', 'value': 'all'},
-                {'label': 'Rated', 'value': 'True'},
-                {'label': 'Unrated', 'value': 'False'}
+                {'label': 'Rated', 'value': 'yes'},
+                {'label': 'Unrated', 'value': 'no'}
             ],
             value='all',  # Default value
             labelStyle={'display': 'inline-block'}
@@ -182,8 +181,8 @@ app.layout = html.Div([
             id='rated_filter',
             options=[
                 {'label': 'All', 'value': 'all'},
-                {'label': 'Rated', 'value': True},
-                {'label': 'Unrated', 'value': False}
+                {'label': 'Rated', 'value': 'yes'},
+                {'label': 'Unrated', 'value': 'no'}
             ],
             value='all',  # Default value
             labelStyle={'display': 'inline-block'}
@@ -212,7 +211,7 @@ def update_graph(sort_by_value, rated_value):
     # Group by opponent ID and calculate win rate and match count
     opponent_stats_filtered = filtered_data.groupby('Opponent_ID').agg(
         Match_Count=('Opponent_ID', 'size'),
-        Win_Rate=('User_Win', 'mean')
+        Win_Rate=('Result', lambda x: (x == 'Win').mean())
     ).reset_index()
 
     # Apply mapping to opponent stats for display
@@ -265,10 +264,10 @@ def update_output(n_clicks, value):
     if filtered_data.empty:
         return 'No matches found for this opponent'
 
-    # Group by 'Opponent_ID' and calculate win rate and count for each
+    # Group by 'Opponent_ID' and calculate match count and win rate for each
     opponent_stats = filtered_data.groupby('Opponent_ID').agg(
         Match_Count=('Opponent_ID', 'size'),
-        Win_Rate=('User_Win', 'mean')
+        Win_Rate=('Result', lambda x: (x == 'Win').mean() * 100)  # Calculate win rate as a percentage
     ).reset_index()
 
     # Apply mapping to opponent stats for display
@@ -280,7 +279,7 @@ def update_output(n_clicks, value):
         opponent_name = row['Opponent_Name']
         matches = row['Match_Count']
         win_rate = row['Win_Rate']
-        results.append(f"{opponent_name}: {matches} matches, {win_rate:.2%} win rate")
+        results.append(f"{opponent_name}: {matches} matches, {win_rate }% win rate")
 
     return html.Ul([html.Li(opponent) for opponent in results])
 
@@ -293,24 +292,19 @@ def update_stats(rating_filter):
     if rating_filter == 'all':
         filtered_data = data
     elif rating_filter == 'True':
-        filtered_data = data[data['Rated'] == True]
+        filtered_data = data[data['Rated'] == 'yes']
     else:
-        filtered_data = data[data['Rated'] == False]
+        filtered_data = data[data['Rated'] == 'no']
 
     total_matches = len(filtered_data)
-    total_winrate = filtered_data['User_Win'].mean()
-    winrate_player1 = filtered_data[filtered_data['User_Is_Player1']]['User_Win'].mean()
-    winrate_player2 = filtered_data[filtered_data['User_Is_Player2']]['User_Win'].mean()
-    number_opponents = len(filtered_data.groupby('Opponent_ID'))
+    total_winrate = (filtered_data['Result'] == 'Win').mean() * 100
+    number_opponents = filtered_data['Opponent_ID'].nunique()
 
     return html.Div([
         html.H3(f'Total Matches: {total_matches}'),
-        html.H3(f'Total Winrate: {total_winrate:.2%}'),
-        html.H3(f'Winrate as Player 1: {winrate_player1:.2%}'),
-        html.H3(f'Winrate as Player 2: {winrate_player2:.2%}'),
+        html.H3(f'Total Winrate: {total_winrate:.2f}%'),
         html.H3(f'Number of different Opponents: {number_opponents}')
     ])
-
 
 # Run the app
 if __name__ == '__main__':
