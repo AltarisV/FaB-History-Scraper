@@ -192,9 +192,34 @@ top_opponents_fig.update_layout(
     yaxis_title='Count'
 )
 
+
 # Visualization: Win rate per round.
+# Create a custom sorting function for rounds
+def round_sorter(df):
+    # Create a copy of the dataframe to avoid modifying the original
+    df_sorted = df.copy()
+
+    # Create a new column for sorting
+    df_sorted['Round_Sort'] = df_sorted['Round'].apply(
+        lambda x: int(x) if x.isdigit() else float('inf') if x.startswith('P') else float('inf')
+    )
+
+    # Create a second level sort key for playoff rounds
+    df_sorted['Playoff_Sort'] = df_sorted['Round'].apply(
+        lambda x: int(x[1:]) if x.startswith('P') and x[1:].isdigit() else float('inf')
+    )
+
+    # Sort by numeric rounds first, then by playoff rounds
+    return df_sorted.sort_values(['Round_Sort', 'Playoff_Sort'])
+
+
+# Group by Round and calculate win rate
 round_win_rate = data.groupby('Round')['User_Win'].mean().reset_index()
 round_win_rate['Win Rate'] = round_win_rate['User_Win'] * 100
+
+# Apply custom sorting
+round_win_rate = round_sorter(round_win_rate)
+
 round_win_rate_fig = px.bar(
     round_win_rate,
     x='Round',
@@ -387,6 +412,6 @@ def update_stats_output(rating_filter):
 
 if __name__ == '__main__':
     if getattr(sys, 'frozen', False):
-        app.run_server(debug=False)
+        app.run(debug=False, host='0.0.0.0')
     else:
-        app.run_server(debug=True)
+        app.run(debug=True, host='0.0.0.0')

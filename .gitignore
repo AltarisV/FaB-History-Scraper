@@ -1,0 +1,21 @@
+# Ignore IDE settings
+.idea/
+.vscode/
+
+# Python cache & distribution folders
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Compiled files
+*.exe
+*.spec
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Generated CSV output
+match_history.csv
