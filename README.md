@@ -13,16 +13,14 @@ To use the Scraper, you need:
 2. Choose to create a new script.
 3. Copy the contents of `fabHistoryScript.js` from this repository.
 4. Paste the script into the new script section in GreaseMonkey/TamperMonkey.
-5. Save the script.
+5. Save the script (Ctrl+S).
 
 ## Usage
 1. Navigate to [https://gem.fabtcg.com/profile/player/](https://gem.fabtcg.com/profile/player/) in your web browser.
-2. The script should automatically run and begin scraping match history data.
-3. Once the scraping process is complete, the script will download a CSV file containing the scraped match history.
-4. Remember to deactivate the script to avoid running it every time you access your profile.
-
-## How it Works
-The script navigates through each page of your match history, collecting data on each match. Once it reaches the end of the history, it compiles all collected data into a CSV format and triggers a download of this file.
+2. Change your language to English (top right of the page)
+3. There should be a Yellow Button next to your player name ("Start Match History Export").
+4. The script will automatically enter your match history and go from page to page. Just let it run.
+5. Once the scraping process is complete, the script will download a CSV file containing the scraped match history.
 
 ## Visualizing Data
 To visualize your match history data, you can use the `datadoll.py` script provided in this repository:
@@ -35,7 +33,6 @@ To visualize your match history data, you can use the `datadoll.py` script provi
 Very useful features like
 - How much Elo did I steal from this one player in all of our matches
 - How does the tournament starting time affect my performance
-- Not parsing top8 rounds as swiss rounds
 - More silly graphs
 
 ## License
