@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FaB History Scraper
-// @version      2.0
-// @description  Scrape match history from all pages manually using a button on the profile history page. Includes multilingual result parsing and recognizes Byes.
+// @version      2.1
+// @description  Scrape match history from all pages manually using a button on the profile history page. Includes multilingual result parsing, distinguishes between Swiss and Playoff rounds, and captures both rated and unrated events.
 // @author       Leon Schüßler
 // @match        https://gem.fabtcg.com/profile/player/
 // @match        https://gem.fabtcg.com/profile/history/*
@@ -83,33 +83,75 @@
             const eventName = event.querySelector('h4.event__title')?.textContent.trim() || 'Unknown';
             const eventDate = event.querySelector('.event__when')?.textContent.trim() || 'Unknown';
 
-            let rated = 'Unknown';
-            const ratedItem = [...event.querySelectorAll('.event__meta-item')].find(div => div.textContent.toLowerCase().includes('rated'));
-            if (ratedItem) {
-                const ratedText = ratedItem.textContent.toLowerCase();
-                rated = ratedText.includes('not rated') ? 'No' : (ratedText.includes('rated') ? 'Yes' : 'Unknown');
+            // Determine the rated status by scanning all meta items.
+            // Default to "No" if none explicitly indicate rating.
+            let rated = 'No';
+            const metaItems = Array.from(event.querySelectorAll('.event__meta-item'));
+            for (const item of metaItems) {
+                const txt = item.textContent.toLowerCase();
+                if (txt.includes('rated')) {
+                    rated = txt.includes('not rated') || txt.includes('unrated') ? 'No' : 'Yes';
+                    break;
+                }
             }
 
+            // Process all tables to capture both Swiss and Playoff matches.
             const tables = event.querySelectorAll('table');
-            if (tables.length < 1) return;
-
-            const matchRows = tables[tables.length - 1].querySelectorAll('tbody tr');
             const matches = [];
-            matchRows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 3) {
-                    const round = cells[0].textContent.trim();
-                    const opponent = cells[1].textContent.trim().normalize('NFC');
-                    let result = cells[2].textContent.trim();
-                    const ratingChange = cells[4]?.textContent.trim() ?? '';
+            tables.forEach(table => {
+                const headerCell = table.querySelector('tr th');
+                if (!headerCell) return;
+                const headerText = headerCell.textContent.trim().toLowerCase();
+                // Only process tables that indicate match data.
+                if (!(headerText.includes('round') || headerText.includes('playoff'))) return;
 
-                    if (localizedWins.includes(result)) result = 'Win';
-                    else if (localizedLosses.includes(result)) result = 'Loss';
-                    else if (localizedDraws.includes(result)) result = 'Draw';
-                    else if (localizedByes.includes(result)) result = 'Bye';
-                    else result = 'Unknown';
+                // Get rows from tbody if available; if not, exclude the header row.
+                let rows = table.querySelectorAll('tbody tr');
+                if (!rows.length) {
+                    rows = table.querySelectorAll('tr:not(:first-child)');
+                }
 
-                    matches.push({ round, opponent, result, ratingChange });
+                if (headerText.includes('playoff')) {
+                    // Process Playoff rounds table.
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        if (cells.length >= 4) {
+                            // Prepend "P" to differentiate playoff rounds from Swiss rounds.
+                            let round = "P" + cells[0].textContent.trim();
+                            const opponent = cells[1].textContent.trim().normalize('NFC');
+                            let result = cells[2].textContent.trim();
+                            const ratingChange = cells[3]?.textContent.trim() || '';
+
+                            if (localizedWins.includes(result)) result = 'Win';
+                            else if (localizedLosses.includes(result)) result = 'Loss';
+                            else if (localizedDraws.includes(result)) result = 'Draw';
+                            else if (localizedByes.includes(result)) result = 'Bye';
+                            else result = 'Unknown';
+
+                            matches.push({ round, opponent, result, ratingChange });
+                        }
+                    });
+                } else if (headerText.includes('round')) {
+                    // Process Swiss rounds table.
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        // Accept rows with at least 3 cells.
+                        if (cells.length >= 3) {
+                            let round = cells[0].textContent.trim();
+                            const opponent = cells[1].textContent.trim().normalize('NFC');
+                            let result = cells[2].textContent.trim();
+                            // Use cell 4 if available, otherwise leave ratingChange blank.
+                            const ratingChange = (cells.length >= 5 ? cells[4].textContent.trim() : '');
+
+                            if (localizedWins.includes(result)) result = 'Win';
+                            else if (localizedLosses.includes(result)) result = 'Loss';
+                            else if (localizedDraws.includes(result)) result = 'Draw';
+                            else if (localizedByes.includes(result)) result = 'Bye';
+                            else result = 'Unknown';
+
+                            matches.push({ round, opponent, result, ratingChange });
+                        }
+                    });
                 }
             });
 
