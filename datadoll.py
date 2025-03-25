@@ -1,3 +1,4 @@
+import sys
 import dash
 from dash.dependencies import Input, Output, State
 from dash import dcc, html
@@ -386,4 +387,7 @@ def update_stats_output(rating_filter):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+    if getattr(sys, 'frozen', False):
+        app.run_server(debug=False)
+    else:
+        app.run_server(debug=True)
