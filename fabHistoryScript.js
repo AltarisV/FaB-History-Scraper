@@ -3,6 +3,7 @@
 // @version      2.0
 // @description  Scrape match history from all pages manually using a button on the profile history page. Includes multilingual result parsing and recognizes Byes.
 // @author       Leon Schüßler
+// @match        https://gem.fabtcg.com/profile/player/
 // @match        https://gem.fabtcg.com/profile/history/*
 // @grant        none
 // ==/UserScript==
@@ -17,17 +18,27 @@
     const localizedDraws = ['Draw', '引き分け', 'Empate', 'Pareggio', 'Match nul', 'Unentschieden', 'Égalité'];
     const localizedByes = ['Bye', '不戦勝', 'Bye (Freilos)', 'Sin rival'];
 
-    if (localStorage.getItem('scrapeInProgress') === 'true') {
+    const isProfilePage = window.location.pathname.startsWith('/profile/player');
+    const isHistoryPage = window.location.pathname.startsWith('/profile/history');
+
+    if (isProfilePage) {
+        injectScrapeButton();
+    }
+
+    if (localStorage.getItem('scrapeInProgress') === 'true' && isHistoryPage) {
         console.log('Resuming scraping...');
         setTimeout(scrapeEventData, navigationDelay);
         return;
     }
 
-    injectScrapeButton();
-
     function injectScrapeButton() {
-        const headings = [...document.querySelectorAll('h1, h2, h3, h4')];
-        const header = headings.find(h => h.textContent.trim().toLowerCase().includes('event history') || h.textContent.trim().toLowerCase().includes('historique'));
+        const nameHeader = document.querySelector('.profile-text h2');
+        if (!nameHeader) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'space-between';
 
         const button = document.createElement('button');
         button.textContent = 'Start Match History Export';
@@ -40,26 +51,23 @@
         button.style.borderRadius = '4px';
         button.style.cursor = 'pointer';
         button.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
-        button.style.verticalAlign = 'middle';
 
         button.addEventListener('click', () => {
-            console.log('Scraping started...');
+            const playerName = nameHeader.textContent.trim();
+            const gemId = document.querySelector('.profile-text p')?.textContent.trim().replace('GEM ID: ', '') || 'Unknown';
+            const eloBlock = [...document.querySelectorAll('.profile-stat h3')].find(h => h.textContent.includes('Elo Rating'));
+            const eloRating = eloBlock?.querySelector('strong')?.textContent.trim() || 'Unknown';
+
+            localStorage.setItem('fabPlayerMeta', JSON.stringify({ name: playerName, gemId, eloRating }));
             localStorage.setItem('allEventData', JSON.stringify([]));
             localStorage.setItem('scrapeInProgress', 'true');
-            scrapeEventData();
+
+            window.location.href = '/profile/history/?page=1';
         });
 
-        if (header) {
-            const wrapper = document.createElement('span');
-            wrapper.appendChild(button);
-            header.appendChild(wrapper);
-        } else {
-            button.style.position = 'fixed';
-            button.style.top = '20px';
-            button.style.right = '20px';
-            button.style.zIndex = '1000';
-            document.body.appendChild(button);
-        }
+        nameHeader.parentElement.insertBefore(wrapper, nameHeader);
+        wrapper.appendChild(nameHeader);
+        wrapper.appendChild(button);
     }
 
     function scrapeEventData() {
@@ -138,6 +146,16 @@
 
     function saveDataToCSV() {
         const allEventData = JSON.parse(localStorage.getItem('allEventData')) || [];
+        const playerMeta = JSON.parse(localStorage.getItem('fabPlayerMeta')) || {};
+
+        const metaHeader = [
+            `# Player Name: ${playerMeta.name ?? 'Unknown'}`,
+            `# GEM ID: ${playerMeta.gemId ?? 'Unknown'}`,
+            `# Elo Rating (Overall): ${playerMeta.eloRating ?? 'Unknown'}`,
+            `# Export Date: ${new Date().toISOString()}`,
+            ''
+        ];
+
         const csvRows = ['Event Name,Event Date,Rated,Round,Opponent,Result,Rating Change'];
 
         allEventData.forEach(event => {
@@ -155,7 +173,7 @@
         });
 
         const BOM = '\uFEFF';
-        const csvContent = BOM + csvRows.join('\n');
+        const csvContent = BOM + metaHeader.concat(csvRows).join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 
         const url = URL.createObjectURL(blob);
