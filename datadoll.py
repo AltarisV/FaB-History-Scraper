@@ -8,7 +8,6 @@ import plotly.graph_objs as go
 import io
 from dateutil import parser
 
-# Define the CSV file path
 FILE_PATH = 'match_history.csv'
 
 
@@ -122,7 +121,7 @@ daily_elo_fig = px.area(
 daily_elo_fig.update_layout(
     xaxis_title="Date",
     yaxis_title="Elo Rating",
-    yaxis=dict(range=[y_min-10, y_max+10])
+    yaxis=dict(range=[y_min - 10, y_max + 10])
 )
 
 # Elo Change over time
