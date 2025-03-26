@@ -48,6 +48,9 @@ def load_csv_data(file_path):
     return meta, df
 
 
+# ------------------------------------------------
+# Load & preprocess data
+# ------------------------------------------------
 def preprocess_data(df):
     if 'Opponent' not in df.columns:
         raise KeyError("Expected column 'Opponent' not found in CSV data.")
@@ -82,9 +85,6 @@ def wrap_label(name):
     return "<br>".join(textwrap.wrap(name, width=12, break_long_words=False, break_on_hyphens=False))
 
 
-# ------------------------------------------------
-# Load & preprocess data
-# ------------------------------------------------
 meta, data = load_csv_data(FILE_PATH)
 data = preprocess_data(data)
 
@@ -202,9 +202,6 @@ round_win_rate_fig.update_traces(hovertemplate='Round %{x}<br>Win Rate=%{y:.2f}%
 round_win_rate_fig.update_layout(yaxis_title="Win Rate (%)")
 
 
-# ------------------------------------------------
-# Color bins for DataTable
-# ------------------------------------------------
 def discrete_background_color_bins(n_bins=5, col_name='Win_Rate'):
     bounds = [i * (100.0 / n_bins) for i in range(n_bins + 1)]
     styles = []
@@ -225,21 +222,16 @@ def discrete_background_color_bins(n_bins=5, col_name='Win_Rate'):
     return styles
 
 
-# ------------------------------------------------
-# Helper: Re-apply the AG Grid filter model
-# ------------------------------------------------
 def apply_filter_model(df, filter_model):
     filtered = df.copy()
     for col, cond in filter_model.items():
         if cond.get('filterType') != 'text' or col not in filtered.columns:
             continue
 
-        # single‐filter
         if 'filter' in cond:
             filtered = filtered[filtered[col].str.contains(cond['filter'], case=False, na=False)]
             continue
 
-        # multi‐condition
         masks = []
         for sub in cond.get('conditions', []):
             masks.append(filtered[col].str.contains(sub.get('filter', ''), case=False, na=False))
@@ -315,9 +307,7 @@ app.layout = dbc.Container(fluid=True, children=[
         )
     ]),
 
-    # ----------------------------
-    # All Matches (Filters + Summary + Grid)
-    # ----------------------------
+    # All Matches AG Grid
     dbc.Row([
         dbc.Col(
             dbc.Card([
@@ -325,13 +315,23 @@ app.layout = dbc.Container(fluid=True, children=[
                 dbc.CardBody([
                     html.Div(id='aggrid_summary', className="mb-3"),
 
-                    # AG Grid
                     AgGrid(
                         id='all_matches_grid',
                         filterModel={},
                         columnDefs=[
                             {"headerName": "Event Name", "field": "Event Name", "sortable": True, "filter": True},
-                            {"headerName": "Event Date", "field": "Event Date", "sortable": True, "filter": True},
+                            {"headerName": "Event Date",
+                             "field": "Event Date",
+                             "sortable": True,
+                             "filter": "agDateColumnFilter",
+                             "valueGetter": {
+                                 "function": "d3.timeParse('%b. %d, %Y')(params.data['Event Date'])"
+                             },
+                             "valueFormatter": {
+                                 "function": "params.data['Event Date']"
+                             },
+                             "filterParams": {"browserDatePicker": True}
+                             },
                             {"headerName": "Rated", "field": "Rated", "sortable": True, "filter": True},
                             {"headerName": "Round", "field": "Round", "sortable": True, "filter": True},
                             {"headerName": "Opponent", "field": "Opponent", "sortable": True, "filter": True},
@@ -348,7 +348,7 @@ app.layout = dbc.Container(fluid=True, children=[
         )
     ]),
 
-    # Additional Graphs: Top Opponents and Win Rate per Round
+    # Top Opponents and Win Rate per Round
     dbc.Row([
         dbc.Col(
             dbc.Card(
@@ -467,7 +467,6 @@ def update_aggrid_summary(filter_model, row_data):
     """
     df = pd.DataFrame(row_data)
 
-    # If no filterModel is set, use the entire dataset
     if not filter_model:
         filtered_df = df
     else:
