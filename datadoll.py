@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objs as go
 import io
 from dateutil import parser
-from dash_ag_grid import AgGrid  # pip install dash-ag-grid
+from dash_ag_grid import AgGrid
 
 FILE_PATH = 'match_history.csv'
 
@@ -31,7 +31,14 @@ def load_csv_data(file_path):
 
     try:
         csv_content = ''.join(csv_lines)
-        df = pd.read_csv(io.StringIO(csv_content), skip_blank_lines=True)
+        df = pd.read_csv(
+            io.StringIO(csv_content),
+            sep=r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)',  # split only on commas outside quotes
+            engine='python'
+        )
+        # strip surrounding quotes from all string columns
+        for col in df.select_dtypes(include='object'):
+            df[col] = df[col].str.strip('"')
     except Exception as e:
         print(f"Error parsing CSV data: {e}")
         raise
@@ -47,10 +54,13 @@ def preprocess_data(df):
     df['Is_Bye'] = df['Opponent'].str.contains('Bye', case=False, na=False)
     df = df[~df['Is_Bye']].copy()
 
-    try:
-        df['Event_Date'] = pd.to_datetime(df['Event Date'], format='%b. %d, %Y')
-    except Exception:
-        df['Event_Date'] = df['Event Date'].apply(lambda d: parser.parse(d.replace('noon', '12:00 PM')))
+    # parse Event Date, stripping quotes removed earlier
+    df['Event_Date'] = pd.to_datetime(df['Event Date'], format='%b. %d, %Y', errors='coerce')
+    missing = df['Event_Date'].isna()
+    if missing.any():
+        df.loc[missing, 'Event_Date'] = df.loc[missing, 'Event Date'].apply(
+            lambda d: parser.parse(d.replace('noon', '12:00 PM'))
+        )
 
     def extract_opponent_id(player_str):
         if pd.isna(player_str) or '(' not in player_str or ')' not in player_str:
