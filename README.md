@@ -1,5 +1,7 @@
 # FaB-History-Scraper
 
+Check out the latest release here: [Latest Release](https://github.com/AltarisV/FaB-History-Scraper/releases)
+
 ## About
 `FaB-History-Scraper` is a userscript for GreaseMonkey/TamperMonkey designed to scrape a user's personal matchup history from [https://gem.fabtcg.com/profile/player/](https://gem.fabtcg.com/profile/player/). This script automates the process of gathering match history data, which can be useful for analysis, tracking progress, or simply archiving your match records.
 
