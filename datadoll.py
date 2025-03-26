@@ -8,6 +8,8 @@ import plotly.graph_objs as go
 import io
 from dateutil import parser
 from dash_ag_grid import AgGrid
+import dash_bootstrap_components as dbc
+import textwrap
 
 FILE_PATH = 'match_history.csv'
 
@@ -33,10 +35,9 @@ def load_csv_data(file_path):
         csv_content = ''.join(csv_lines)
         df = pd.read_csv(
             io.StringIO(csv_content),
-            sep=r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)',  # split only on commas outside quotes
+            sep=r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)',
             engine='python'
         )
-        # strip surrounding quotes from all string columns
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].str.strip('"')
     except Exception as e:
@@ -54,7 +55,6 @@ def preprocess_data(df):
     df['Is_Bye'] = df['Opponent'].str.contains('Bye', case=False, na=False)
     df = df[~df['Is_Bye']].copy()
 
-    # parse Event Date, stripping quotes removed earlier
     df['Event_Date'] = pd.to_datetime(df['Event Date'], format='%b. %d, %Y', errors='coerce')
     missing = df['Event_Date'].isna()
     if missing.any():
@@ -78,6 +78,10 @@ def preprocess_data(df):
     return df
 
 
+def wrap_label(name):
+    return "<br>".join(textwrap.wrap(name, width=12, break_long_words=False, break_on_hyphens=False))
+
+
 # ------------------------------------------------
 # Load & preprocess data
 # ------------------------------------------------
@@ -95,7 +99,7 @@ id_to_name_map = (
 )
 
 # ------------------------------------------------
-# Example Figures
+# Figures
 # ------------------------------------------------
 rated_data = data[data['Rated'] == 'Yes'].copy()
 rated_data['Rating_Change'] = pd.to_numeric(rated_data['Rating Change'], errors='coerce').fillna(0)
@@ -104,39 +108,41 @@ rated_data['Cumulative_Rating'] = 1500 + rated_data['Rating_Change'].cumsum()
 rated_data['Date'] = rated_data['Event_Date'].dt.date
 
 daily_data = rated_data.groupby('Date', as_index=False).last()
-y_min = daily_data['Cumulative_Rating'].min() if not daily_data.empty else 1400
-y_max = daily_data['Cumulative_Rating'].max() if not daily_data.empty else 1600
+y_min, y_max = (
+    daily_data['Cumulative_Rating'].min(), daily_data['Cumulative_Rating'].max()) if not daily_data.empty else (
+    1400, 1600)
 daily_elo_fig = px.area(daily_data, x='Date', y='Cumulative_Rating', title='Elo Rating Over Time')
-daily_elo_fig.update_layout(
-    xaxis_title="Date",
-    yaxis_title="Elo Rating",
-    yaxis=dict(range=[y_min - 10, y_max + 10])
-)
+daily_elo_fig.update_layout(xaxis_title="Date", yaxis_title="Elo Rating", yaxis=dict(range=[y_min - 10, y_max + 10]))
 
 elo_by_opponent = rated_data.groupby("Opponent_ID")["Rating_Change"].sum().reset_index()
 elo_by_opponent["Opponent_Name"] = elo_by_opponent["Opponent_ID"].map(id_to_name_map)
 
 top_negative = elo_by_opponent.nsmallest(5, "Rating_Change")
+top_negative['Opponent_Label'] = top_negative['Opponent_Name'].apply(wrap_label)
 top_negative_fig = px.bar(
     top_negative,
-    x="Opponent_Name",
+    x="Opponent_Label",
     y="Rating_Change",
     title="Top 5 Opponents you donated Elo to",
-    labels={"Opponent_Name": "Opponent", "Rating_Change": "Elo Change"},
+    labels={"Opponent_Label": "Opponent", "Rating_Change": "Total Elo Change"},
     color_discrete_sequence=['#FF7F24']
 )
-top_negative_fig.update_layout(xaxis_title="Opponent", yaxis_title="Total Elo Change")
+top_negative_fig.update_layout(xaxis_title="Opponent", yaxis_title="Total Elo Change", xaxis_tickangle=0,
+                               xaxis_tickfont=dict(size=10), margin=dict(t=50, b=80))
 
 top_positive = elo_by_opponent.nlargest(5, "Rating_Change")
+top_positive['Opponent_Label'] = top_positive['Opponent_Name'].apply(wrap_label)
 top_positive_fig = px.bar(
     top_positive,
-    x="Opponent_Name",
+    x="Opponent_Label",
     y="Rating_Change",
     title="Top 5 Opponents donating Elo to you",
-    labels={"Opponent_Name": "Opponent", "Rating_Change": "Elo Change"},
-    color_discrete_sequence=['#006994']
+    labels={"Opponent_Label": "Opponent", "Rating_Change": "Total Elo Change"},
+    color_discrete_sequence=['#006994'],
+    template=top_negative_fig.layout.template
 )
-top_positive_fig.update_layout(xaxis_title="Opponent", yaxis_title="Total Elo Change")
+top_positive_fig.update_layout(xaxis_title="Opponent", yaxis_title="Total Elo Change", xaxis_tickangle=0,
+                               xaxis_tickfont=dict(size=10), margin=dict(t=50, b=80))
 
 opponent_stats = data.groupby('Opponent_ID').agg(
     Match_Count=('Opponent_ID', 'size'),
@@ -146,15 +152,17 @@ opponent_stats = data.groupby('Opponent_ID').agg(
 opponent_stats['Opponent_Name'] = opponent_stats['Opponent_ID'].map(id_to_name_map)
 
 top_5_opponents = opponent_stats.nlargest(5, 'Match_Count')
+top_5_opponents['Opponent_Label'] = top_5_opponents['Opponent_Name'].apply(wrap_label)
+
 top_opponents_fig = go.Figure()
 top_opponents_fig.add_trace(go.Bar(
-    x=top_5_opponents['Opponent_Name'],
+    x=top_5_opponents['Opponent_Label'],
     y=top_5_opponents['Loss_Count'],
     name='Losses',
     marker={'color': '#FF7F24'}
 ))
 top_opponents_fig.add_trace(go.Bar(
-    x=top_5_opponents['Opponent_Name'],
+    x=top_5_opponents['Opponent_Label'],
     y=top_5_opponents['Win_Count'],
     name='Wins',
     marker={'color': '#006994'}
@@ -163,7 +171,11 @@ top_opponents_fig.update_layout(
     barmode='stack',
     title='Top 5 Opponents by Match Count',
     xaxis_title='Opponent',
-    yaxis_title='Count'
+    yaxis_title='Count',
+    xaxis_tickangle=0,
+    xaxis_tickfont=dict(size=10),
+    margin=dict(t=50, b=80),
+    template=top_negative_fig.layout.template
 )
 
 round_win_rate = data.groupby('Round')['User_Win'].mean().reset_index()
@@ -217,185 +229,230 @@ def discrete_background_color_bins(n_bins=5, col_name='Win_Rate'):
 # Helper: Re-apply the AG Grid filter model
 # ------------------------------------------------
 def apply_filter_model(df, filter_model):
-    """
-    Minimal example that handles only text 'contains' filters
-    for 'Event Name' and 'Opponent'. Extend for numeric/date filters.
-    """
-    # Example filter_model structure:
-    # {
-    #   "Event Name": {
-    #     "filterType": "text",
-    #     "type": "contains",
-    #     "filter": "calling"
-    #   },
-    #   "Opponent": {
-    #     "filterType": "text",
-    #     "type": "contains",
-    #     "filter": "Nunez"
-    #   },
-    #   ...
-    # }
-    for col, condition in filter_model.items():
-        if col not in df.columns:
+    filtered = df.copy()
+    for col, cond in filter_model.items():
+        if cond.get('filterType') != 'text' or col not in filtered.columns:
             continue
-        if condition.get('filterType') == 'text':
-            mode = condition.get('type')
-            val = condition.get('filter', '')
-            if mode == 'contains':
-                df = df[df[col].str.contains(val, case=False, na=False)]
-            # Additional logic for startsWith, endsWith, etc.
-    return df
+
+        # single‐filter
+        if 'filter' in cond:
+            filtered = filtered[filtered[col].str.contains(cond['filter'], case=False, na=False)]
+            continue
+
+        # multi‐condition
+        masks = []
+        for sub in cond.get('conditions', []):
+            masks.append(filtered[col].str.contains(sub.get('filter', ''), case=False, na=False))
+
+        if cond.get('operator') == 'OR':
+            combined = pd.Series(False, index=filtered.index)
+            for m in masks:
+                combined |= m
+        else:  # AND
+            combined = pd.Series(True, index=filtered.index)
+            for m in masks:
+                combined &= m
+
+        filtered = filtered[combined]
+
+    return filtered
 
 
 # ------------------------------------------------
 # Dash App Layout
 # ------------------------------------------------
-app = dash.Dash(__name__)
-app.layout = html.Div([
-    html.H1(f'FaB History Analysis for {player_name}'),
-    html.Div(f'GEM ID: {player_id}'),
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX])
+app.layout = dbc.Container(fluid=True, children=[
+    html.Link(id="theme_link", rel="stylesheet", href=dbc.themes.LUX),
 
-    # Filter Controls (Rating)
-    html.Div([
-        dcc.RadioItems(
-            id='rating_filter',
-            options=[
-                {'label': 'All', 'value': 'all'},
-                {'label': 'Rated', 'value': 'Yes'},
-                {'label': 'Unrated', 'value': 'No'}
-            ],
-            value='all',
-            labelStyle={'display': 'inline-block'}
-        ),
-        html.Div(id='stats_output')
-    ], style={'margin': '20px 0'}),
+    dbc.NavbarSimple(
+        brand=f"FaB History Analysis for {player_name} (GEM ID: {player_id})",
+        color="primary",
+        dark=True,
+        children=[
+            dbc.Select(
+                id="theme_selector",
+                options=[
+                    {"label": name, "value": url}
+                    for name, url in vars(dbc.themes).items() if name.isupper()
+                ],
+                value=dbc.themes.LUX,
+                style={"width": "180px"}
+            )
+        ],
+        className="mb-4"
+    ),
 
-    # Elo Over Time, Gains/Losses
-    dcc.Graph(id='elo_over_time_graph', figure=daily_elo_fig),
-    dcc.Graph(id='top-negative-graph', figure=top_negative_fig),
-    dcc.Graph(id='top-positive-graph', figure=top_positive_fig),
-
-    # Checklist for excluding extremes
-    html.Div([
-        dcc.Checklist(
-            id='extreme_filter',
-            options=[{'label': 'Hide 0% / 100% Opponents', 'value': 'exclude'}],
-            value=[],
-            labelStyle={'display': 'inline-block'}
+    # Elo Over Time graph
+    dbc.Row([
+        dbc.Col(
+            dbc.Card(
+                dcc.Graph(id='elo_over_time_graph', figure=daily_elo_fig),
+                body=True
+            ),
+            width=12,
+            className="mb-4"
         )
-    ], style={'margin': '20px 0'}),
+    ]),
+
+    # Top Negative and Positive graphs
+    dbc.Row([
+        dbc.Col(
+            dbc.Card(
+                dcc.Graph(id='top-negative-graph', figure=top_negative_fig),
+                body=True
+            ),
+            width=6,
+            className="mb-4"
+        ),
+        dbc.Col(
+            dbc.Card(
+                dcc.Graph(id='top-positive-graph', figure=top_positive_fig),
+                body=True
+            ),
+            width=6,
+            className="mb-4"
+        )
+    ]),
+
+    # ----------------------------
+    # All Matches (Filters + Summary + Grid)
+    # ----------------------------
+    dbc.Row([
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader(html.H2("All Matches")),
+                dbc.CardBody([
+                    html.Div(id='aggrid_summary', className="mb-3"),
+
+                    # AG Grid
+                    AgGrid(
+                        id='all_matches_grid',
+                        filterModel={},
+                        columnDefs=[
+                            {"headerName": "Event Name", "field": "Event Name", "sortable": True, "filter": True},
+                            {"headerName": "Event Date", "field": "Event Date", "sortable": True, "filter": True},
+                            {"headerName": "Rated", "field": "Rated", "sortable": True, "filter": True},
+                            {"headerName": "Round", "field": "Round", "sortable": True, "filter": True},
+                            {"headerName": "Opponent", "field": "Opponent", "sortable": True, "filter": True},
+                            {"headerName": "Result", "field": "Result", "sortable": True, "filter": True},
+                            {"headerName": "Rating Change", "field": "Rating Change", "sortable": True, "filter": True},
+                        ],
+                        rowData=data.to_dict('records'),
+                        defaultColDef={"resizable": True, "flex": 1, "sortable": True, "filter": True},
+                        style={'height': '500px', 'width': '100%'}
+                    )
+                ])
+            ], className="mb-4"),
+            width=12
+        )
+    ]),
+
+    # Additional Graphs: Top Opponents and Win Rate per Round
+    dbc.Row([
+        dbc.Col(
+            dbc.Card(
+                dcc.Graph(id='top-opponents-graph', figure=top_opponents_fig),
+                body=True
+            ),
+            width=6,
+            className="mb-4"
+        ),
+        dbc.Col(
+            dbc.Card(
+                dcc.Graph(figure=round_win_rate_fig),
+                body=True
+            ),
+            width=6,
+            className="mb-4"
+        )
+    ]),
 
     # Opponent Win Rate Table
-    dash_table.DataTable(
-        id='winrate_table',
-        columns=[
-            {'name': 'Opponent Name', 'id': 'Opponent_Name'},
-            {'name': 'Match Count', 'id': 'Match_Count'},
-            {'name': 'Win Rate (%)', 'id': 'Win_Rate'}
-        ],
-        filter_action='native',
-        sort_action='native',
-        page_action='native',
-        page_size=15,
-        style_table={'overflowX': 'auto', 'border': 'thin lightgrey solid'},
-        style_cell={
-            'textAlign': 'left',
-            'padding': '8px',
-            'minWidth': '80px',
-            'width': '120px',
-            'maxWidth': '180px',
-        },
-        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
-        style_data_conditional=[
-                                   {
-                                       'if': {'row_index': 'odd'},
-                                       'backgroundColor': 'rgb(248, 248, 248)'
-                                   }
-                               ] + discrete_background_color_bins(n_bins=5, col_name='Win_Rate')
-    ),
+    dbc.Row([
+        dbc.Col(
+            dbc.Card([
+                dbc.CardHeader(html.H2("Opponents by Win Rate")),
+                dbc.CardBody([
+                    dcc.Checklist(
+                        id='extreme_filter',
+                        options=[{'label': 'Hide 0% / 100% Opponents', 'value': 'exclude'}],
+                        value=['exclude'],
+                        labelStyle={'display': 'inline-block'},
+                        className="mb-3"
+                    ),
+                    dash_table.DataTable(
+                        id='winrate_table',
+                        columns=[
+                            {'name': 'Opponent Name', 'id': 'Opponent_Name'},
+                            {'name': 'Match Count', 'id': 'Match_Count'},
+                            {'name': 'Win Rate (%)', 'id': 'Win_Rate'}
+                        ],
+                        filter_action='native',
+                        sort_action='native',
+                        sort_by=[{'column_id': 'Win_Rate', 'direction': 'desc'}],  # ← default sort
+                        page_action='native',
+                        page_size=15,
+                        style_table={'overflowX': 'auto', 'border': 'thin lightgrey solid'},
+                        style_cell={
+                            'textAlign': 'left',
+                            'padding': '8px',
+                            'minWidth': '80px',
+                            'width': '120px',
+                            'maxWidth': '180px',
+                        },
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'},
+                        style_data_conditional=[
+                                                   {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgb(248, 248, 248)'}
+                                               ] + discrete_background_color_bins(n_bins=5, col_name='Win_Rate')
+                    )
+                ])
+            ], className="mb-4"),
+            width=12
+        )
+    ]),
 
-    html.H2("All Matches"),
-
-    # Summary for the filtered subset
-    html.Div(id='aggrid_summary', style={'margin': '10px 0', 'fontWeight': 'bold'}),
-
-    AgGrid(
-        id='all_matches_grid',
-        # The key property that will hold the current filter model
-        filterModel={},  # Default to empty
-        # Allowed arguments from dash-ag-grid >=31.3.1
-
-        columnDefs=[
-            {"headerName": "Event Name", "field": "Event Name", "sortable": True, "filter": True},
-            {"headerName": "Event Date", "field": "Event Date", "sortable": True, "filter": True},
-            {"headerName": "Rated", "field": "Rated", "sortable": True, "filter": True},
-            {"headerName": "Round", "field": "Round", "sortable": True, "filter": True},
-            {"headerName": "Opponent", "field": "Opponent", "sortable": True, "filter": True},
-            {"headerName": "Result", "field": "Result", "sortable": True, "filter": True},
-            {"headerName": "Rating Change", "field": "Rating Change", "sortable": True, "filter": True},
-        ],
-        rowData=data.to_dict('records'),
-        defaultColDef={
-            "resizable": True,
-            "flex": 1,
-            "sortable": True,
-            "filter": True,
-        },
-        style={'height': '500px', 'width': '100%'}
-    ),
-
-    dcc.Graph(id='top-opponents-graph', figure=top_opponents_fig),
-    dcc.Graph(figure=round_win_rate_fig)
-])
+    # Footer
+    dbc.Row(
+        dbc.Col(
+            html.Footer(
+                f"Data last updated: {meta.get('Export Date', '')}",
+                className="text-center text-muted"
+            ),
+            width=12
+        ),
+        className="mt-4"
+    )
+], className="p-4")
 
 
 # ------------------------------------------------
 # Callbacks
 # ------------------------------------------------
 @app.callback(
-    Output('winrate_table', 'data'),
-    [Input('rating_filter', 'value'),
-     Input('extreme_filter', 'value')]
+    Output("theme_link", "href"),
+    Input("theme_selector", "value")
 )
-def update_winrate_table(rating_value, extreme_filter):
-    if rating_value != 'all':
-        filtered = data[data['Rated'] == rating_value]
-    else:
-        filtered = data.copy()
+def change_theme(theme_url):
+    return theme_url
 
-    stats = filtered.groupby('Opponent_ID').agg(
+
+@app.callback(
+    Output('winrate_table', 'data'),
+    Input('extreme_filter', 'value')
+)
+def update_winrate_table(extreme_filter):
+    stats = data.groupby('Opponent_ID').agg(
         Match_Count=('Opponent_ID', 'size'),
         Win_Rate=('User_Win', 'mean')
     ).reset_index()
-
-    stats['Win_Rate'] = stats['Win_Rate'] * 100
+    stats['Win_Rate'] *= 100
     stats['Opponent_Name'] = stats['Opponent_ID'].map(id_to_name_map)
 
     if 'exclude' in extreme_filter:
         stats = stats[(stats['Win_Rate'] > 0) & (stats['Win_Rate'] < 100)]
 
     return stats[['Opponent_Name', 'Match_Count', 'Win_Rate']].to_dict('records')
-
-
-@app.callback(
-    Output('stats_output', 'children'),
-    [Input('rating_filter', 'value')]
-)
-def update_stats_output(rating_filter):
-    if rating_filter == 'all':
-        filtered = data
-    else:
-        filtered = data[data['Rated'] == rating_filter]
-
-    total_matches = len(filtered)
-    overall_winrate = filtered["User_Win"].mean()
-    unique_opponents = filtered["Opponent_ID"].nunique()
-
-    return html.Div([
-        html.H3(f'Total Matches: {total_matches}'),
-        html.H3(f'Total Winrate: {overall_winrate:.2%}'),
-        html.H3(f'Number of Different Opponents: {unique_opponents}')
-    ])
 
 
 @app.callback(
@@ -419,11 +476,13 @@ def update_aggrid_summary(filter_model, row_data):
     total_matches = len(filtered_df)
     total_wins = sum(filtered_df['Result'].str.lower() == 'win')
     total_winrate = total_wins / total_matches if total_matches else 0
+    total_opponents = filtered_df['Opponent'].nunique()
     net_elo = pd.to_numeric(filtered_df['Rating Change'], errors='coerce').fillna(0).sum()
 
     return html.Div([
         html.Span(f"Matches Shown: {total_matches}  |  "),
         html.Span(f"Win Rate: {total_winrate:.2%}  |  "),
+        html.Span(f"Unique Opponents: {total_opponents}  |  "),
         html.Span(f"Net Elo Change: {net_elo:.2f}")
     ])
 
