@@ -115,7 +115,7 @@
                     // Process Playoff rounds table.
                     rows.forEach(row => {
                         const cells = row.querySelectorAll('td');
-                        if (cells.length >= 4) {
+                        if (cells.length >= 3) {
                             // Prepend "P" to differentiate playoff rounds from Swiss rounds.
                             let round = "P" + cells[0].textContent.trim();
                             const opponent = cells[1].textContent.trim().normalize('NFC');
@@ -135,7 +135,6 @@
                     // Process Swiss rounds table.
                     rows.forEach(row => {
                         const cells = row.querySelectorAll('td');
-                        // Accept rows with at least 3 cells.
                         if (cells.length >= 3) {
                             let round = cells[0].textContent.trim();
                             const opponent = cells[1].textContent.trim().normalize('NFC');
