@@ -374,13 +374,25 @@ app.layout = dbc.Container(fluid=True, children=[
             dbc.Card([
                 dbc.CardHeader(html.H2("Opponents by Win Rate")),
                 dbc.CardBody([
-                    dcc.Checklist(
-                        id='extreme_filter',
-                        options=[{'label': 'Hide 0% / 100% Opponents', 'value': 'exclude'}],
-                        value=['exclude'],
-                        labelStyle={'display': 'inline-block'},
-                        className="mb-3"
+                    html.Div(
+                        [
+                            dcc.Checklist(
+                                id='extreme_filter',
+                                options=[{'label': 'Hide 0% / 100% Opponents', 'value': 'exclude'}],
+                                value=['exclude'],
+                                labelStyle={'display': 'inline-block'},
+                                style={'marginRight': '20px'}
+                            ),
+                            dcc.Checklist(
+                                id='rated_filter',
+                                options=[{'label': 'Show Only Rated', 'value': 'rated_only'}],
+                                value=[],
+                                labelStyle={'display': 'inline-block'}
+                            ),
+                        ],
+                        style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '1rem'}
                     ),
+                    html.P("Toxic Tip: You can type text, or use operators like >, <, = to filter numeric columns (e.g. >1)."),
                     dash_table.DataTable(
                         id='winrate_table',
                         columns=[
@@ -390,7 +402,7 @@ app.layout = dbc.Container(fluid=True, children=[
                         ],
                         filter_action='native',
                         sort_action='native',
-                        sort_by=[{'column_id': 'Win_Rate', 'direction': 'desc'}],  # ← default sort
+                        sort_by=[{'column_id': 'Win_Rate', 'direction': 'desc'}],
                         page_action='native',
                         page_size=15,
                         style_table={'overflowX': 'auto', 'border': 'thin lightgrey solid'},
@@ -439,10 +451,16 @@ def change_theme(theme_url):
 
 @app.callback(
     Output('winrate_table', 'data'),
-    Input('extreme_filter', 'value')
+    Input('extreme_filter', 'value'),
+    Input('rated_filter', 'value')
 )
-def update_winrate_table(extreme_filter):
-    stats = data.groupby('Opponent_ID').agg(
+def update_winrate_table(extreme_filter, rated_filter):
+    if 'rated_only' in rated_filter:
+        filtered_data = data[data['Rated'] == 'Yes']
+    else:
+        filtered_data = data
+
+    stats = filtered_data.groupby('Opponent_ID').agg(
         Match_Count=('Opponent_ID', 'size'),
         Win_Rate=('User_Win', 'mean')
     ).reset_index()
