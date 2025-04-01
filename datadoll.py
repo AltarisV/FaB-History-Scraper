@@ -78,6 +78,14 @@ def preprocess_data(df):
     df['Opponent_ID'] = df['Opponent'].apply(extract_opponent_id)
     df['Opponent_Name'] = df['Opponent'].apply(extract_opponent_name)
     df['User_Win'] = df['Result'].str.strip().str.lower() == 'win'
+
+    # Preprocess "Rating Change": replace empty values with "0" and convert to numeric.
+    if 'Rating Change' in df.columns:
+        df['Rating Change'] = df['Rating Change'].fillna("")
+        df['Rating Change'] = df['Rating Change'].replace("", "0")
+        df['Rating Change'] = df['Rating Change'].str.replace(r'^\+', '', regex=True)
+        df['Rating Change'] = pd.to_numeric(df['Rating Change'], errors='coerce').fillna(0)
+
     return df
 
 
@@ -102,15 +110,15 @@ id_to_name_map = (
 # Figures
 # ------------------------------------------------
 rated_data = data[data['Rated'] == 'Yes'].copy()
-rated_data['Rating_Change'] = pd.to_numeric(rated_data['Rating Change'], errors='coerce').fillna(0)
+rated_data['Rating_Change'] = rated_data['Rating Change']
 rated_data = rated_data.sort_values('Event_Date')
 rated_data['Cumulative_Rating'] = 1500 + rated_data['Rating_Change'].cumsum()
 rated_data['Date'] = rated_data['Event_Date'].dt.date
 
 daily_data = rated_data.groupby('Date', as_index=False).last()
 y_min, y_max = (
-    daily_data['Cumulative_Rating'].min(), daily_data['Cumulative_Rating'].max()) if not daily_data.empty else (
-    1400, 1600)
+    daily_data['Cumulative_Rating'].min(), daily_data['Cumulative_Rating'].max()
+) if not daily_data.empty else (1400, 1600)
 daily_elo_fig = px.area(daily_data, x='Date', y='Cumulative_Rating', title='Elo Rating Over Time')
 daily_elo_fig.update_layout(xaxis_title="Date", yaxis_title="Elo Rating", yaxis=dict(range=[y_min - 10, y_max + 10]))
 
@@ -319,24 +327,56 @@ app.layout = dbc.Container(fluid=True, children=[
                         id='all_matches_grid',
                         filterModel={},
                         columnDefs=[
-                            {"headerName": "Event Name", "field": "Event Name", "sortable": True, "filter": True},
-                            {"headerName": "Event Date",
-                             "field": "Event Date",
-                             "sortable": True,
-                             "filter": "agDateColumnFilter",
-                             "valueGetter": {
-                                 "function": "d3.timeParse('%b. %d, %Y')(params.data['Event Date'])"
-                             },
-                             "valueFormatter": {
-                                 "function": "params.data['Event Date']"
-                             },
-                             "filterParams": {"browserDatePicker": True}
-                             },
-                            {"headerName": "Rated", "field": "Rated", "sortable": True, "filter": True},
-                            {"headerName": "Round", "field": "Round", "sortable": True, "filter": True},
-                            {"headerName": "Opponent", "field": "Opponent", "sortable": True, "filter": True},
-                            {"headerName": "Result", "field": "Result", "sortable": True, "filter": True},
-                            {"headerName": "Rating Change", "field": "Rating Change", "sortable": True, "filter": True},
+                            {
+                                "headerName": "Event Name",
+                                "field": "Event Name",
+                                "sortable": True,
+                                "filter": True
+                            },
+                            {
+                                "headerName": "Event Date",
+                                "field": "Event Date",
+                                "sortable": True,
+                                "filter": "agDateColumnFilter",
+                                "valueGetter": {
+                                    "function": "d3.timeParse('%b. %d, %Y')(params.data['Event Date'])"
+                                },
+                                "valueFormatter": {
+                                    "function": "params.data['Event Date']"
+                                },
+                                "filterParams": {"browserDatePicker": True}
+                            },
+                            {
+                                "headerName": "Rated",
+                                "field": "Rated",
+                                "sortable": True,
+                                "filter": True
+                            },
+                            {
+                                "headerName": "Round",
+                                "field": "Round",
+                                "sortable": True,
+                                "filter": True
+                            },
+                            {
+                                "headerName": "Opponent",
+                                "field": "Opponent",
+                                "sortable": True,
+                                "filter": True
+                            },
+                            {
+                                "headerName": "Result",
+                                "field": "Result",
+                                "sortable": True,
+                                "filter": True
+                            },
+                            {
+                                "headerName": "Rating Change",
+                                "field": "Rating Change",
+                                "sortable": True,
+                                "filter": True,
+                                "type": "numericColumn"
+                            },
                         ],
                         rowData=data.to_dict('records'),
                         defaultColDef={"resizable": True, "flex": 1, "sortable": True, "filter": True},
